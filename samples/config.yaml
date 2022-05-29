@@ -6,7 +6,9 @@ mqtt:
 ssh:
   server: 10.10.10.10:22
   user: recorder
-  key: /config/id_rsa
+  key: /secret/id_rsa
+output:
+  path: /data
 upload:
   workers: 4
   timeout: 60

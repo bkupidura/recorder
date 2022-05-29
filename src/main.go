@@ -39,6 +39,8 @@ func getConfig() (*viper.Viper, error) {
 	config.SetDefault("output.path", "/data")
 	config.SetDefault("record.burst_overlap", 2)
 	config.SetDefault("record.workers", 4)
+	config.SetDefault("record.input_args", map[string]string{})
+	config.SetDefault("record.output_args", map[string]string{"c:a": "aac", "c:v": "copy"})
 	config.SetDefault("convert.workers", 0)
 	config.SetDefault("convert.input_args", map[string]string{"f": "concat", "vaapi_device": "/dev/dri/renderD128", "hwaccel": "vaapi", "safe": "0"})
 	config.SetDefault("convert.output_args", map[string]string{"c:a": "copy", "c:v": "h264_vaapi", "preset": "veryfast", "vf": "format=nv12|vaapi,hwupload"})
@@ -75,9 +77,9 @@ func main() {
 
 	bus := EventBus.New()
 
-    if err := metric.Register(bus); err != nil {
-        log.Panicf("unable to register prometheus metrics: %v", err)
-    }
+	if err := metric.Register(bus); err != nil {
+		log.Panicf("unable to register prometheus metrics: %v", err)
+	}
 
 	mqttClient, err := mqtt.New(config, bus)
 	if err != nil {

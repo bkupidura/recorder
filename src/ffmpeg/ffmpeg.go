@@ -18,9 +18,20 @@ const (
 	convertTimeout = 2
 )
 
-func StartRecording(stream, outputFile string, length int64) error {
-	err := ffmpeg.Input(stream, ffmpeg.KwArgs{"t": length, "rtsp_transport": "tcp"}).
-		Output(outputFile, ffmpeg.KwArgs{"c:a": "aac", "c:v": "copy"}).
+func StartRecording(stream, outputFile string, inputArgs map[string]string, outputArgs map[string]string, length int64) error {
+	inputKwArgs := ffmpeg.KwArgs{}
+	outputKwArgs := ffmpeg.KwArgs{"t": length}
+
+	for k, v := range inputArgs {
+		inputKwArgs[k] = v
+	}
+
+	for k, v := range outputArgs {
+		outputKwArgs[k] = v
+	}
+
+	err := ffmpeg.Input(stream, inputKwArgs).
+		Output(outputFile, outputKwArgs).
 		WithTimeout(time.Duration(length*recordTimeout) * time.Second).
 		Run()
 	if err != nil {

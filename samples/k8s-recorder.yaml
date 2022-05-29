@@ -95,7 +95,7 @@ spec:
     spec:
       containers:
         - name: recorder
-          image: bkupidura/recorder:latest
+          image: ghcr.io/bkupidura/recorder:latest
           imagePullPolicy: IfNotPresent
           resources:
             requests:

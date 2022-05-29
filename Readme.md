@@ -21,7 +21,7 @@ docker run -d \
   -v /recorder/data:/data \
   -v /recorder/config:/config \
   -v /recorder/secret:/secret \
-  recorder:latest
+  ghcr.io/bkupidura/recorder:latest
 ```
 
 ## Config

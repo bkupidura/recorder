@@ -88,8 +88,8 @@ func (u *uploader) dispatch(msg *uploadMsg) {
 	bus.Publish("metrics:recorder_worker", &u.runningWorkers, "uploader")
 
 	go func(msg *uploadMsg) {
-		defer atomic.AddInt64(&u.runningWorkers, -1)
 		defer bus.Publish("metrics:recorder_worker", &u.runningWorkers, "uploader")
+		defer atomic.AddInt64(&u.runningWorkers, -1)
 
 		if msg.shouldWait() {
 			time.Sleep(time.Second * 2)

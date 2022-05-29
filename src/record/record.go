@@ -127,8 +127,8 @@ func (r *recorder) dispatch(msg *recordMsg) {
 	bus.Publish("metrics:recorder_worker", &r.runningWorkers, "recorder")
 
 	go func(msg *recordMsg) {
-		defer atomic.AddInt64(&r.runningWorkers, -1)
 		defer bus.Publish("metrics:recorder_worker", &r.runningWorkers, "recorder")
+		defer atomic.AddInt64(&r.runningWorkers, -1)
 
 		cm, err := msg.record(r.outputDir, r.burstOverlap, r.inputArgs, r.outputArgs, r.timeoutRatio, r.uploadEnabled)
 		if err != nil {

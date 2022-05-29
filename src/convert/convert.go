@@ -73,8 +73,8 @@ func (c *converter) dispatch(msg *ConvertMsg) {
 	bus.Publish("metrics:recorder_worker", &c.runningWorkers, "converter")
 
 	go func(msg *ConvertMsg) {
-		defer atomic.AddInt64(&c.runningWorkers, -1)
 		defer bus.Publish("metrics:recorder_worker", &c.runningWorkers, "converter")
+		defer atomic.AddInt64(&c.runningWorkers, -1)
 
 		if err := msg.convert(c.inputArgs, c.outputArgs, c.timeoutRatio); err != nil {
 			log.Print(err)

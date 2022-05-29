@@ -154,5 +154,7 @@ func New(c *viper.Viper, evbus EventBus.Bus) (*recorder, error) {
 		return nil, errors.New(fmt.Sprintf("unable to subscribe: %v", err))
 	}
 
+	bus.Publish("metrics:recorder_error", 0, "record")
+
 	return r, nil
 }

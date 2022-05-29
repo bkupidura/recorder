@@ -35,7 +35,6 @@ func (m *ConvertMsg) convert(inputArgs, outputArgs map[string]string) error {
 	recordFileName := fmt.Sprintf("%s/%s-full.mp4", m.outputDir, m.outputFilePrefix)
 
 	if err := ffmpeg.ConvertRecording(m.parts, recordFileName, inputArgs, outputArgs, m.length); err != nil {
-		bus.Publish("metrics:recorder_error", 1, "convert")
 		return errors.New(fmt.Sprintf("unable to convert %s recording: %v", recordFileName, err))
 	}
 
@@ -78,6 +77,7 @@ func (c *converter) dispatch(msg *ConvertMsg) {
 
 		if err := msg.convert(c.convertInputArgs, c.convertOutputArgs); err != nil {
 			log.Print(err)
+			bus.Publish("metrics:recorder_error", 1, "convert")
 		}
 		return
 	}(msg)
@@ -96,6 +96,8 @@ func New(c *viper.Viper, evbus EventBus.Bus) (*converter, error) {
 	if err := bus.SubscribeAsync("recorder:convert", r.dispatch, true); err != nil {
 		return nil, errors.New(fmt.Sprintf("unable to subscribe: %v", err))
 	}
+
+	bus.Publish("metrics:recorder_error", 0, "convert")
 
 	return r, nil
 }

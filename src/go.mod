@@ -11,6 +11,7 @@ require (
 
 require (
 	github.com/alexliesenfeld/health v0.6.0 // indirect
+	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef // indirect
 	github.com/aws/aws-sdk-go v1.38.20 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect

@@ -9,16 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"recorder/convert"
+	"recorder/metric"
 	"recorder/record"
 	"recorder/upload"
 
 	"github.com/alexliesenfeld/health"
+	"github.com/asaskevich/EventBus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
-)
-
-var (
-	uploaderQueue = make(chan *upload.UploadMsg, 1024)
 )
 
 func getConfig() (*viper.Viper, error) {
@@ -39,7 +38,7 @@ func getConfig() (*viper.Viper, error) {
 	config.SetDefault("output.path", "/data")
 	config.SetDefault("record.burst_overlap", 2)
 	config.SetDefault("record.workers", 4)
-	config.SetDefault("convert.enabled", false)
+	config.SetDefault("convert.workers", 0)
 	config.SetDefault("convert.input_args", map[string]string{"f": "concat", "vaapi_device": "/dev/dri/renderD128", "hwaccel": "vaapi", "safe": "0"})
 	config.SetDefault("convert.output_args", map[string]string{"c:a": "copy", "c:v": "h264_vaapi", "preset": "veryfast", "vf": "format=nv12|vaapi,hwupload"})
 	config.SetDefault("upload.workers", 4)
@@ -69,17 +68,32 @@ func main() {
 		log.Panicf("unable to read config: %v", err)
 	}
 
-	recorder, err := record.NewRecorder(config, &uploaderQueue)
+	bus := EventBus.New()
+
+	if config.GetInt64("record.workers") < 1 {
+		log.Panic("config record.workers should bebiger than 0")
+	}
+
+	recorder, err := record.NewRecorder(config, bus)
 	if err != nil {
 		log.Panicf("unable to create recorder: %v", err)
 	}
-	go recorder.Start()
 
-	uploader, err := upload.NewUploader(config, &uploaderQueue)
-	if err != nil {
-		log.Panicf("unable to create uploader: %v", err)
+	if config.GetInt64("convert.workers") > 0 {
+		if _, err := convert.NewConverter(config, bus); err != nil {
+			log.Panicf("unable to create converter: %v", err)
+		}
 	}
-	go uploader.Start()
+
+	if config.GetInt64("upload.workers") > 0 {
+		if _, err := upload.NewUploader(config, bus); err != nil {
+			log.Panicf("unable to create uploader: %v", err)
+		}
+	}
+
+	if err := metric.Register(bus); err != nil {
+		log.Panicf("unable to register prometheus metrics: %v", err)
+	}
 
 	checker := health.NewChecker(
 		health.WithCacheDuration(1*time.Second),

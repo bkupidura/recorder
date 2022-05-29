@@ -51,9 +51,10 @@ data:
       timeout: 60
       max_errors: 30
     record:
+      workers: 4
       burst_overlap: 2
     convert:
-      enabled: false
+      workers: 0
       input_args:
         "f": "concat"
         "vaapi_device": "/dev/dri/renderD128"

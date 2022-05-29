@@ -15,7 +15,7 @@ record:
   workers: 4
   burst_overlap: 2
 convert:
-  enabled: true
+  workers: 0
   input_args:
     "f": "concat"
     "vaapi_device": "/dev/dri/renderD128"

@@ -13,12 +13,7 @@ import (
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 )
 
-const (
-	recordTimeout  = 2
-	convertTimeout = 2
-)
-
-func StartRecording(stream, outputFile string, inputArgs map[string]string, outputArgs map[string]string, length int64) error {
+func StartRecording(stream, outputFile string, inputArgs map[string]string, outputArgs map[string]string, length int64, timeoutRatio int64) error {
 	inputKwArgs := ffmpeg.KwArgs{}
 	outputKwArgs := ffmpeg.KwArgs{"t": length}
 
@@ -32,7 +27,7 @@ func StartRecording(stream, outputFile string, inputArgs map[string]string, outp
 
 	err := ffmpeg.Input(stream, inputKwArgs).
 		Output(outputFile, outputKwArgs).
-		WithTimeout(time.Duration(length*recordTimeout) * time.Second).
+		WithTimeout(time.Duration(length*timeoutRatio) * time.Second).
 		Run()
 	if err != nil {
 		defer os.Remove(outputFile)
@@ -41,7 +36,7 @@ func StartRecording(stream, outputFile string, inputArgs map[string]string, outp
 	return nil
 }
 
-func ConvertRecording(inputFiles []string, outputFile string, inputArgs map[string]string, outputArgs map[string]string, totalLength int64) error {
+func ConvertRecording(inputFiles []string, outputFile string, inputArgs map[string]string, outputArgs map[string]string, totalLength, timeoutRatio int64) error {
 	var parts []string
 	for _, inputFile := range inputFiles {
 		parts = append(parts, "file "+inputFile)
@@ -69,7 +64,7 @@ func ConvertRecording(inputFiles []string, outputFile string, inputArgs map[stri
 
 	err := ffmpeg.Input(listFileName, inputKwArgs).
 		Output(outputFile, outputKwArgs).
-		WithTimeout(time.Duration(totalLength*convertTimeout) * time.Second).
+		WithTimeout(time.Duration(totalLength*timeoutRatio) * time.Second).
 		Run()
 
 	if err != nil {

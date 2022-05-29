@@ -25,7 +25,7 @@ type ConvertMsg struct {
 	length           int64
 }
 
-func (m *ConvertMsg) convert(inputArgs, outputArgs map[string]string) error {
+func (m *ConvertMsg) convert(inputArgs, outputArgs map[string]string, timeoutRatio int64) error {
 	if len(m.parts) == 0 {
 		return nil
 	}
@@ -34,7 +34,7 @@ func (m *ConvertMsg) convert(inputArgs, outputArgs map[string]string) error {
 
 	recordFileName := fmt.Sprintf("%s/%s-full.mp4", m.outputDir, m.outputFilePrefix)
 
-	if err := ffmpeg.ConvertRecording(m.parts, recordFileName, inputArgs, outputArgs, m.length); err != nil {
+	if err := ffmpeg.ConvertRecording(m.parts, recordFileName, inputArgs, outputArgs, m.length, timeoutRatio); err != nil {
 		return errors.New(fmt.Sprintf("unable to convert %s recording: %v", recordFileName, err))
 	}
 
@@ -53,11 +53,12 @@ func NewMsg(outputDir, outputFilePrefix string, parts []string, length int64) *C
 }
 
 type converter struct {
-	workers           int64
-	runningWorkers    int64
-	convertInputArgs  map[string]string
-	convertOutputArgs map[string]string
-	mtx               *sync.Mutex
+	workers        int64
+	runningWorkers int64
+	inputArgs      map[string]string
+	outputArgs     map[string]string
+	timeoutRatio   int64
+	mtx            *sync.Mutex
 }
 
 func (c *converter) dispatch(msg *ConvertMsg) {
@@ -75,7 +76,7 @@ func (c *converter) dispatch(msg *ConvertMsg) {
 		defer atomic.AddInt64(&c.runningWorkers, -1)
 		defer bus.Publish("metrics:recorder_worker", &c.runningWorkers, "converter")
 
-		if err := msg.convert(c.convertInputArgs, c.convertOutputArgs); err != nil {
+		if err := msg.convert(c.inputArgs, c.outputArgs, c.timeoutRatio); err != nil {
 			log.Print(err)
 			bus.Publish("metrics:recorder_error", 1, "convert")
 		}
@@ -87,10 +88,11 @@ func New(c *viper.Viper, evbus EventBus.Bus) (*converter, error) {
 	bus = evbus
 
 	r := &converter{
-		workers:           c.GetInt64("convert.workers"),
-		convertInputArgs:  c.GetStringMapString("convert.input_args"),
-		convertOutputArgs: c.GetStringMapString("convert.output_args"),
-		mtx:               &sync.Mutex{},
+		workers:      c.GetInt64("convert.workers"),
+		inputArgs:    c.GetStringMapString("convert.input_args"),
+		outputArgs:   c.GetStringMapString("convert.output_args"),
+		timeoutRatio: c.GetInt64("convert.timeout_ratio"),
+		mtx:          &sync.Mutex{},
 	}
 
 	if err := bus.SubscribeAsync("recorder:convert", r.dispatch, true); err != nil {

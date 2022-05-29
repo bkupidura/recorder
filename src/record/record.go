@@ -32,7 +32,7 @@ type recordMsg struct {
 	Burst   int64  `json:"burst"`
 }
 
-func (m *recordMsg) record(outputDir string, burstOverlap int64, inputArgs, outputArgs map[string]string, uploadEnabled bool) (*convert.ConvertMsg, error) {
+func (m *recordMsg) record(outputDir string, burstOverlap int64, inputArgs, outputArgs map[string]string, timeoutRatio int64, uploadEnabled bool) (*convert.ConvertMsg, error) {
 	log.Printf("recording stream:%s; burst:%d; length:%d; cam_name:%s, prefix:%s", m.Stream, m.Burst, m.Length, m.CamName, m.Prefix)
 
 	var wg sync.WaitGroup
@@ -60,7 +60,7 @@ func (m *recordMsg) record(outputDir string, burstOverlap int64, inputArgs, outp
 			fileName := fmt.Sprintf("%s/%s-%03d-%03d.mp4", dirName, fileNamePrefix, i+1, m.Burst)
 
 			now := time.Now()
-			if err := ffmpeg.StartRecording(m.Stream, fileName, inputArgs, outputArgs, m.Length); err != nil {
+			if err := ffmpeg.StartRecording(m.Stream, fileName, inputArgs, outputArgs, m.Length, timeoutRatio); err != nil {
 				log.Printf("unable to record %s from stream: %v", fileName, err)
 				bus.Publish("metrics:recorder_error", 1, "record")
 				return
@@ -103,15 +103,16 @@ func NewMsg(mqttMessage MQTT.Message) (*recordMsg, error) {
 }
 
 type recorder struct {
-	outputDir         string
-	burstOverlap      int64
-	workers           int64
-	runningWorkers    int64
-	convertInputArgs  map[string]string
-	convertOutputArgs map[string]string
-	uploadEnabled     bool
-	convertEnabled    bool
-	mtx               *sync.Mutex
+	outputDir      string
+	burstOverlap   int64
+	workers        int64
+	runningWorkers int64
+	inputArgs      map[string]string
+	outputArgs     map[string]string
+	timeoutRatio   int64
+	uploadEnabled  bool
+	convertEnabled bool
+	mtx            *sync.Mutex
 }
 
 func (r *recorder) dispatch(msg *recordMsg) {
@@ -129,7 +130,7 @@ func (r *recorder) dispatch(msg *recordMsg) {
 		defer atomic.AddInt64(&r.runningWorkers, -1)
 		defer bus.Publish("metrics:recorder_worker", &r.runningWorkers, "recorder")
 
-		cm, err := msg.record(r.outputDir, r.burstOverlap, r.convertInputArgs, r.convertOutputArgs, r.uploadEnabled)
+		cm, err := msg.record(r.outputDir, r.burstOverlap, r.inputArgs, r.outputArgs, r.timeoutRatio, r.uploadEnabled)
 		if err != nil {
 			log.Print(err)
 		}
@@ -144,14 +145,15 @@ func New(c *viper.Viper, evbus EventBus.Bus) (*recorder, error) {
 	bus = evbus
 
 	r := &recorder{
-		outputDir:         c.GetString("output.path"),
-		burstOverlap:      c.GetInt64("record.burst_overlap"),
-		workers:           c.GetInt64("record.workers"),
-		convertInputArgs:  c.GetStringMapString("record.input_args"),
-		convertOutputArgs: c.GetStringMapString("record.output_args"),
-		convertEnabled:    c.GetInt64("convert.workers") != 0,
-		uploadEnabled:     c.GetInt64("upload.workers") != 0,
-		mtx:               &sync.Mutex{},
+		outputDir:      c.GetString("output.path"),
+		burstOverlap:   c.GetInt64("record.burst_overlap"),
+		workers:        c.GetInt64("record.workers"),
+		inputArgs:      c.GetStringMapString("record.input_args"),
+		outputArgs:     c.GetStringMapString("record.output_args"),
+		timeoutRatio:   c.GetInt64("record.timeout_ratio"),
+		convertEnabled: c.GetInt64("convert.workers") != 0,
+		uploadEnabled:  c.GetInt64("upload.workers") != 0,
+		mtx:            &sync.Mutex{},
 	}
 
 	if err := bus.SubscribeAsync("recorder:record", r.dispatch, true); err != nil {

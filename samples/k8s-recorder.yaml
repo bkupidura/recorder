@@ -1,0 +1,144 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: recorder
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recorder
+  namespace: recorder
+  labels:
+    app.kubernetes.io/name: recorder
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: false
+  ports:
+    - name: recorder
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: recorder
+
+---
+apiVersion: v1
+data:
+  id_rsa: <replace_me>
+  mqtt_password: <replace_me>
+kind: Secret
+metadata:
+  name: recorder
+  namespace: recorder
+type: Opaque
+
+---
+apiVersion: v1
+data:
+  config: |
+    mqtt:
+      topic: recorder
+      server: <replace_me>:1883
+      user: recorder
+    ssh:
+      user: recorder
+      key: /secret/id_rsa
+      server: <replace_me>
+    upload:
+      workers: 4
+      timeout: 60
+      max_errors: 30
+    record:
+      burst_overlap: 2
+    convert:
+      enabled: false
+      input_args:
+        "f": "concat"
+        "vaapi_device": "/dev/dri/renderD128"
+        "hwaccel": "vaapi"
+        "safe": "0"
+      output_args:
+        "c:a": "copy"
+        "c:v": "h264_vaapi"
+        "preset": "veryfast"
+        "vf": "format=nv12|vaapi,hwupload"
+kind: ConfigMap
+metadata:
+  name: recorder
+  namespace: recorder
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recorder
+  namespace: recorder
+  labels:
+    app.kubernetes.io/name: recorder
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: recorder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: recorder
+      annotations:
+        prometheus.io/port: "8080"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+        - name: recorder
+          image: bkupidura/recorder:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /secret
+              name: id-rsa
+            - mountPath: /config
+              name: config
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          env:
+            - name: TZ
+              value: Europe/Warsaw
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: recorder
+                  key: mqtt_password
+      volumes:
+        - name: id-rsa
+          secret:
+            secretName: recorder
+            defaultMode: 0400
+            items:
+              - key: id_rsa
+                path: id_rsa
+        - name: config
+          configMap:
+            name: recorder
+            items:
+              - key: config
+                path: config.yaml
+      terminationGracePeriodSeconds: 5

@@ -1,0 +1,28 @@
+mqtt:
+  topic: recorder
+  server: mqtt.local:1883
+  password: password
+  user: recorder
+ssh:
+  server: 10.10.10.10:22
+  user: recorder
+  key: /config/id_rsa
+upload:
+  workers: 4
+  timeout: 60
+  max_errors: 30
+record:
+  workers: 4
+  burst_overlap: 2
+convert:
+  enabled: true
+  input_args:
+    "f": "concat"
+    "vaapi_device": "/dev/dri/renderD128"
+    "hwaccel": "vaapi"
+    "safe": "0"
+  output_args:
+    "c:a": "copy"
+    "c:v": "h264_vaapi"
+    "preset": "veryfast"
+    "vf": "format=nv12|vaapi,hwupload"

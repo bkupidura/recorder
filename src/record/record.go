@@ -1,7 +1,6 @@
 package record
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,53 +23,6 @@ import (
 var (
 	bus EventBus.Bus
 )
-
-func newMqttClient(server, user, password, topic string) (MQTT.Client, error) {
-	connOpts := MQTT.NewClientOptions().
-		AddBroker(server).
-		SetCleanSession(true).
-		SetKeepAlive(30 * time.Second).
-		SetPingTimeout(5 * time.Second).
-		SetMaxReconnectInterval(3 * time.Second)
-
-	if user != "" {
-		connOpts.SetUsername(user)
-		if password != "" {
-			connOpts.SetPassword(password)
-		}
-	}
-
-	connOpts.SetWill(fmt.Sprintf("%s/available", topic), "offline", 1, true)
-
-	tlsConfig := &tls.Config{InsecureSkipVerify: true, ClientAuth: tls.NoClientCert}
-	connOpts.SetTLSConfig(tlsConfig)
-
-	onMessage := func(client MQTT.Client, message MQTT.Message) {
-		r, err := newRecordMsg(message)
-		if err != nil {
-			log.Printf("unable to create new record message from '%s': %v", message.Payload(), err)
-			return
-		}
-		bus.Publish("recorder:record", r)
-	}
-
-	connOpts.OnConnect = func(client MQTT.Client) {
-		log.Printf("connected to mqtt %s", server)
-		if token := client.Subscribe(topic, byte(2), onMessage); token.Wait() && token.Error() != nil {
-			log.Panicf("unable to subscribe to topic: %v", token.Error())
-		}
-		if token := client.Publish(fmt.Sprintf("%s/available", topic), 1, true, "online"); token.Wait() && token.Error() != nil {
-			log.Panicf("unable to publish availability message: %v", token.Error())
-		}
-	}
-
-	client := MQTT.NewClient(connOpts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		return nil, token.Error()
-	}
-
-	return client, nil
-}
 
 type recordMsg struct {
 	Stream  string `json:"stream"`
@@ -117,7 +69,7 @@ func (m *recordMsg) record(outputDir string, burstOverlap int64, uploadEnabled b
 			log.Printf("recorded %s (took:%.2fs)", fileName, time.Since(now).Seconds())
 
 			if uploadEnabled {
-				bus.Publish("uploader:upload", upload.NewUploadMsg(fileName))
+				bus.Publish("uploader:upload", upload.NewMsg(fileName))
 			}
 
 			parts = append(parts, fileName)
@@ -125,10 +77,10 @@ func (m *recordMsg) record(outputDir string, burstOverlap int64, uploadEnabled b
 		time.Sleep(time.Duration(m.Length-burstOverlap) * time.Second)
 	}
 	wg.Wait()
-	return convert.NewConvertMsg(dirName, fileNamePrefix, parts, m.Burst*m.Length), nil
+	return convert.NewMsg(dirName, fileNamePrefix, parts, m.Burst*m.Length), nil
 }
 
-func newRecordMsg(mqttMessage MQTT.Message) (*recordMsg, error) {
+func NewMsg(mqttMessage MQTT.Message) (*recordMsg, error) {
 	r := &recordMsg{}
 	if err := json.Unmarshal(mqttMessage.Payload(), r); err != nil {
 		return nil, err
@@ -157,7 +109,6 @@ type recorder struct {
 	runningWorkers int64
 	uploadEnabled  bool
 	convertEnabled bool
-	mqttClient     MQTT.Client
 	mtx            *sync.Mutex
 }
 
@@ -187,16 +138,7 @@ func (r *recorder) dispatch(msg *recordMsg) {
 	}(msg)
 }
 
-func (r *recorder) IsConnected() bool {
-	return r.mqttClient.IsConnected()
-}
-
-func NewRecorder(c *viper.Viper, evbus EventBus.Bus) (*recorder, error) {
-	mqttClient, err := newMqttClient(c.GetString("mqtt.server"), c.GetString("mqtt.user"), c.GetString("mqtt.password"), c.GetString("mqtt.topic"))
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("unable to create mqtt client: %v", err))
-	}
-
+func New(c *viper.Viper, evbus EventBus.Bus) (*recorder, error) {
 	bus = evbus
 
 	r := &recorder{
@@ -205,7 +147,6 @@ func NewRecorder(c *viper.Viper, evbus EventBus.Bus) (*recorder, error) {
 		workers:        c.GetInt64("record.workers"),
 		convertEnabled: c.GetInt64("convert.workers") != 0,
 		uploadEnabled:  c.GetInt64("upload.workers") != 0,
-		mqttClient:     mqttClient,
 		mtx:            &sync.Mutex{},
 	}
 

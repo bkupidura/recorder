@@ -44,7 +44,7 @@ func (m *ConvertMsg) convert(inputArgs, outputArgs map[string]string) error {
 	return nil
 }
 
-func NewConvertMsg(outputDir, outputFilePrefix string, parts []string, length int64) *ConvertMsg {
+func NewMsg(outputDir, outputFilePrefix string, parts []string, length int64) *ConvertMsg {
 	return &ConvertMsg{
 		outputFilePrefix: outputFilePrefix,
 		outputDir:        outputDir,
@@ -83,7 +83,7 @@ func (c *converter) dispatch(msg *ConvertMsg) {
 	}(msg)
 }
 
-func NewConverter(c *viper.Viper, evbus EventBus.Bus) (*converter, error) {
+func New(c *viper.Viper, evbus EventBus.Bus) (*converter, error) {
 	bus = evbus
 
 	r := &converter{

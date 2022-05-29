@@ -11,6 +11,7 @@ import (
 
 	"recorder/convert"
 	"recorder/metric"
+	"recorder/mqtt"
 	"recorder/record"
 	"recorder/upload"
 
@@ -57,6 +58,10 @@ func getConfig() (*viper.Viper, error) {
 		}
 	}
 
+	if config.GetInt64("record.workers") < 1 {
+		return nil, errors.New(fmt.Sprintf("config record.workers should bebiger than 0"))
+	}
+
 	return config, nil
 }
 
@@ -70,23 +75,23 @@ func main() {
 
 	bus := EventBus.New()
 
-	if config.GetInt64("record.workers") < 1 {
-		log.Panic("config record.workers should bebiger than 0")
+	mqttClient, err := mqtt.New(config, bus)
+	if err != nil {
+		log.Panicf("unable to create mqtt client: %v", err)
 	}
 
-	recorder, err := record.NewRecorder(config, bus)
-	if err != nil {
+	if _, err := record.New(config, bus); err != nil {
 		log.Panicf("unable to create recorder: %v", err)
 	}
 
 	if config.GetInt64("convert.workers") > 0 {
-		if _, err := convert.NewConverter(config, bus); err != nil {
+		if _, err := convert.New(config, bus); err != nil {
 			log.Panicf("unable to create converter: %v", err)
 		}
 	}
 
 	if config.GetInt64("upload.workers") > 0 {
-		if _, err := upload.NewUploader(config, bus); err != nil {
+		if _, err := upload.New(config, bus); err != nil {
 			log.Panicf("unable to create uploader: %v", err)
 		}
 	}
@@ -102,7 +107,7 @@ func main() {
 			Name:    "mqtt",
 			Timeout: 2 * time.Second,
 			Check: func(ctx context.Context) error {
-				if recorder.IsConnected() != true {
+				if mqttClient.IsConnected() != true {
 					return fmt.Errorf("mqtt not connected")
 				}
 				return nil

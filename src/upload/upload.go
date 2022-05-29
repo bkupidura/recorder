@@ -29,8 +29,7 @@ type uploadMsg struct {
 
 func (m *uploadMsg) upload(client scp.Client) error {
 	now := time.Now()
-	err := client.Connect()
-	if err != nil {
+	if err := client.Connect(); err != nil {
 		return fmt.Errorf("unable to connect to ssh: %v", err)
 	}
 	defer client.Close()
@@ -41,8 +40,7 @@ func (m *uploadMsg) upload(client scp.Client) error {
 	}
 	defer f.Close()
 
-	err = client.CopyFromFile(*f, m.fileName, "0655")
-	if err != nil {
+	if err := client.CopyFromFile(*f, m.fileName, "0655"); err != nil {
 		return fmt.Errorf("unable to copy file over ssh: %v", err)
 	}
 
@@ -55,7 +53,7 @@ func (m *uploadMsg) error(maxErrors int64) error {
 	m.noError++
 	m.lastError = time.Now()
 	if m.noError > maxErrors {
-		return errors.New("to many errors")
+		return errors.New("to many upload errors, giving up")
 	}
 	return nil
 }
@@ -67,7 +65,7 @@ func (m *uploadMsg) shouldWait() bool {
 	return false
 }
 
-func NewUploadMsg(fileName string) *uploadMsg {
+func NewMsg(fileName string) *uploadMsg {
 	return &uploadMsg{fileName: fileName}
 }
 
@@ -99,7 +97,7 @@ func (u *uploader) dispatch(msg *uploadMsg) {
 			return
 		}
 
-		if err := msg.upload(u.scpClients[u.runningWorkers]); err != nil {
+		if err := msg.upload(u.scpClients[u.runningWorkers-1]); err != nil {
 			log.Print(err)
 			bus.Publish("metrics:recorder_error", 1, "upload")
 
@@ -111,7 +109,7 @@ func (u *uploader) dispatch(msg *uploadMsg) {
 	}(msg)
 }
 
-func NewUploader(c *viper.Viper, evbus EventBus.Bus) (*uploader, error) {
+func New(c *viper.Viper, evbus EventBus.Bus) (*uploader, error) {
 	clientConfig, err := auth.PrivateKey(c.GetString("ssh.user"), c.GetString("ssh.key"), ssh.InsecureIgnoreHostKey())
 	if err != nil {
 		return nil, err

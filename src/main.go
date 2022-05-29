@@ -75,6 +75,10 @@ func main() {
 
 	bus := EventBus.New()
 
+    if err := metric.Register(bus); err != nil {
+        log.Panicf("unable to register prometheus metrics: %v", err)
+    }
+
 	mqttClient, err := mqtt.New(config, bus)
 	if err != nil {
 		log.Panicf("unable to create mqtt client: %v", err)
@@ -94,10 +98,6 @@ func main() {
 		if _, err := upload.New(config, bus); err != nil {
 			log.Panicf("unable to create uploader: %v", err)
 		}
-	}
-
-	if err := metric.Register(bus); err != nil {
-		log.Panicf("unable to register prometheus metrics: %v", err)
 	}
 
 	checker := health.NewChecker(

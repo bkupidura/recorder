@@ -104,7 +104,7 @@ func TestRecorder(t *testing.T) {
 	}
 
 	// Check "remote" recording files.
-	recordingFiles, err = ioutil.ReadDir(filepath.Join(outputPath, "data"))
+	recordingFiles, err = ioutil.ReadDir(filepath.Join(outputPath, "data", "test", nowDate))
 	require.Nil(t, err)
 	require.Equal(t, 3, len(recordingFiles))
 

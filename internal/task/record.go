@@ -28,11 +28,14 @@ type Record struct {
 
 type SingleRecordResult struct {
 	FileName string
+	Prefix   string
+	Date     string
 }
 
 type MultipleRecordResult struct {
 	FileNames   []string
 	Prefix      string
+	DirName     string
 	TotalLength int64
 }
 
@@ -67,6 +70,8 @@ func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
 
 			chResult <- &SingleRecordResult{
 				FileName: fileName,
+				Prefix:   r.Prefix,
+				Date:     startTime.Format(dateLayout),
 			}
 			parts = append(parts, fileName)
 		}(r)
@@ -75,7 +80,8 @@ func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
 	wg.Wait()
 	chResult <- &MultipleRecordResult{
 		FileNames:   parts,
-		Prefix:      fmt.Sprintf("%s/%s", dirName, fileNamePrefix),
+		Prefix:      fileNamePrefix,
+		DirName:     dirName,
 		TotalLength: r.Burst * r.Length,
 	}
 

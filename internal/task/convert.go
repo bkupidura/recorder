@@ -20,6 +20,7 @@ var (
 type Convert struct {
 	FileNames []string
 	Prefix    string
+	DirName   string
 	Length    int64
 }
 
@@ -28,7 +29,7 @@ func (r *Convert) Do(ctx context.Context, chResult chan interface{}) error {
 		return nil
 	}
 	now := time.Now()
-	outputFileName := fmt.Sprintf("%s-convert.mp4", r.Prefix)
+	outputFileName := fmt.Sprintf("%s/%s-convert.mp4", r.DirName, r.Prefix)
 	if err := ffmpegConvert(r.FileNames, outputFileName, ctx.Value("ffmpegInputArgs").(map[string]string), ctx.Value("ffmpegOutputArgs").(map[string]string), r.Length); err != nil {
 		log.Printf("unable to convert %s: %v", outputFileName, err)
 		return err

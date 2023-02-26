@@ -87,26 +87,31 @@ func dispatcher(workingPools map[string]*pool.Pool) {
 			case *task.SingleRecordResult:
 				tUpload := &task.Upload{
 					FileName: result.FileName,
+					Prefix:   result.Prefix,
+					Date:     result.Date,
 				}
 				if workingPools["upload"].Running() {
 					workingPools["upload"].Execute(tUpload.Do)
 				}
-				// All recordings are done, lets start convert action.
+			// All recordings are done, lets start convert action.
 			case *task.MultipleRecordResult:
 				tConvert := &task.Convert{
 					FileNames: result.FileNames,
 					Prefix:    result.Prefix,
+					DirName:   result.DirName,
 					Length:    result.TotalLength,
 				}
 				if workingPools["convert"].Running() {
 					workingPools["convert"].Execute(tConvert.Do)
 				}
 			}
-			// Upload task generates result only on failure.
-			// This is used to retry uploads.
+		// Upload task generates result only on failure.
+		// This is used to retry uploads.
 		case uploadResult := <-workingPools["upload"].ResultChan():
 			tUpload := &task.Upload{
 				FileName:  uploadResult.(*task.UploadResult).FileName,
+				Prefix:    uploadResult.(*task.UploadResult).Prefix,
+				Date:      uploadResult.(*task.UploadResult).Date,
 				NoError:   uploadResult.(*task.UploadResult).NoError,
 				LastError: uploadResult.(*task.UploadResult).LastError,
 			}

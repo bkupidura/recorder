@@ -19,12 +19,16 @@ var (
 
 type Upload struct {
 	FileName  string
+	Prefix    string
+	Date      string
 	NoError   int
 	LastError time.Time
 }
 
 type UploadResult struct {
 	FileName  string
+	Prefix    string
+	Date      string
 	NoError   int
 	LastError time.Time
 }
@@ -32,6 +36,8 @@ type UploadResult struct {
 func (r *Upload) retry(ctx context.Context, chResult chan interface{}, onlyRetry bool) {
 	result := &UploadResult{
 		FileName:  r.FileName,
+		Prefix:    r.Prefix,
+		Date:      r.Date,
 		NoError:   r.NoError,
 		LastError: r.LastError,
 	}
@@ -74,7 +80,7 @@ func (r *Upload) Do(ctx context.Context, chResult chan interface{}) error {
 	defer sshClient.Close()
 
 	now := time.Now()
-	if err := sftpUpload(sshClient, r.FileName); err != nil {
+	if err := sftpUpload(sshClient, r.Prefix, r.Date, r.FileName); err != nil {
 		log.Printf("unable to upload %s: %v", r.FileName, err)
 		r.retry(ctx, chResult, false)
 		return err
@@ -96,15 +102,21 @@ func readSSHAuthKey(keyName string) (ssh.Signer, error) {
 	return signer, nil
 }
 
-func sftpUpload(sshClient *ssh.Client, fileName string) error {
+func sftpUpload(sshClient *ssh.Client, prefix, date, fileName string) error {
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
 		return err
 	}
 	defer sftpClient.Close()
 
+	// Create dirs in format data/prefix/date/
+	err = sftpClient.MkdirAll(filepath.Join(sftpDirectory, prefix, date))
+	if err != nil {
+		return err
+	}
+
 	dstFileName := filepath.Base(fileName)
-	dstFile, err := sftpClient.Create(filepath.Join(sftpDirectory, dstFileName))
+	dstFile, err := sftpClient.Create(filepath.Join(sftpDirectory, prefix, date, dstFileName))
 	if err != nil {
 		return err
 	}

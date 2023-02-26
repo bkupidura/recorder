@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// getConfig builds Viper config will some default values.
 func getConfig() (*viper.Viper, error) {
 	config := viper.New()
 

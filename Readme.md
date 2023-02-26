@@ -1,4 +1,4 @@
-Recorder is simple golang service to record rtsp camera stream, and upload it to remote server thru ssh.
+Recorder is simple golang service to record rtsp camera stream, and upload it to remote server thru ssh (sftp).
 It supports recording length and number of videos to record (`burst`).
 
 ## Overview
@@ -6,8 +6,6 @@ Main task of Recorder is to record RTSP camera stream (record) and upload it to 
 But it can also transform (convert) recorded video e.g. convert can be used to change h265 stream to h264. Converted videos are not uploaded to remote server.
 
 Upload will take place right after single recording is finished.
-
-Recorder is using MQTT to get new tasks. It also exposes HTTP endpoints.
 
 ## Build
 `go build .`
@@ -26,6 +24,9 @@ docker run -d \
 
 ## Config
 ```
+api:
+  user:
+    username: password
 ssh:
   server: 10.10.10.10:22
   user: recorder
@@ -252,3 +253,27 @@ Recorder exposes multiple HTTP endpoints:
 * /api/record - accept recording request
 
 Recorder is listening on `:8080` port.
+By default all endpoints are available without authentication, if you want to enable auth simply add `api:user` key to the config file. This will enable basic authentication for `/recordings/` and `/api`.
+
+## SFTP configuration
+Recorder is uploading videos to remote sftp server, here are some hints how to configure sshd.
+
+sshd_config:
+```
+Subsystem       sftp    /usr/libexec/sftp-server
+Match user recorder
+ChrootDirectory %h
+X11Forwarding no
+AllowTcpForwarding no
+ForceCommand internal-sftp
+```
+
+Linux:
+```
+useradd -d /data/recorder -m recorder
+mkdir /data/recorder/.ssh
+mkdir /data/recorder/data
+chown root:root /data/recorder
+chown recorder:recorder /data/recorder/data
+echo 'ssh-rsa ...' > /data/recorder/.ssh/authorized_keys
+```

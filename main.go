@@ -76,11 +76,14 @@ func main() {
 	http.ListenAndServe(fmt.Sprintf(":%d", api.HTTPPort), httpRouter)
 }
 
+// dispatcher handles results from different working pools.
 func dispatcher(workingPools map[string]*pool.Pool) {
 	for {
 		select {
+		// Record working pool triggers recording flow (record -> upload -> convert).
 		case recordResult := <-workingPools["record"].ResultChan():
 			switch result := recordResult.(type) {
+			// Single recording was done, lets upload it to remote sftp server.
 			case *task.SingleRecordResult:
 				tUpload := &task.Upload{
 					FileName: result.FileName,
@@ -88,6 +91,7 @@ func dispatcher(workingPools map[string]*pool.Pool) {
 				if workingPools["upload"].Running() {
 					workingPools["upload"].Execute(tUpload.Do)
 				}
+				// All recordings are done, lets start convert action.
 			case *task.MultipleRecordResult:
 				tConvert := &task.Convert{
 					FileNames: result.FileNames,
@@ -98,6 +102,8 @@ func dispatcher(workingPools map[string]*pool.Pool) {
 					workingPools["convert"].Execute(tConvert.Do)
 				}
 			}
+			// Upload task generates result only on failure.
+			// This is used to retry uploads.
 		case uploadResult := <-workingPools["upload"].ResultChan():
 			tUpload := &task.Upload{
 				FileName:  uploadResult.(*task.UploadResult).FileName,

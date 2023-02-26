@@ -26,7 +26,7 @@ func main() {
 	ctxRecord := context.Background()
 	ctxRecord = context.WithValue(ctxRecord, "outputDir", config.GetString("output.path"))
 	ctxRecord = context.WithValue(ctxRecord, "ffmpegInputArgs", config.GetStringMapString("record.input_args"))
-	ctxRecord = context.WithValue(ctxRecord, "ffmpegOutputArgs", config.GetStringMapString("record.input_args"))
+	ctxRecord = context.WithValue(ctxRecord, "ffmpegOutputArgs", config.GetStringMapString("record.output_args"))
 
 	ctxUpload := context.Background()
 	ctxUpload = context.WithValue(ctxUpload, "sshUser", config.GetString("ssh.user"))

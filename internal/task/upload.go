@@ -29,20 +29,31 @@ type UploadResult struct {
 	LastError time.Time
 }
 
+func (r *Upload) retry(ctx context.Context, chResult chan interface{}, onlyRetry bool) {
+	result := &UploadResult{
+		FileName:  r.FileName,
+		NoError:   r.NoError,
+		LastError: r.LastError,
+	}
+	if !onlyRetry && r.NoError < ctx.Value("maxError").(int)-1 {
+		result.NoError++
+		result.LastError = time.Now()
+	}
+
+	chResult <- result
+}
+
 func (r *Upload) Do(ctx context.Context, chResult chan interface{}) error {
 	if time.Since(r.LastError) < time.Duration(r.NoError)*time.Duration(errorBackoffSecond)*time.Second {
 		time.Sleep(2 * time.Second)
-		chResult <- &UploadResult{
-			FileName:  r.FileName,
-			NoError:   r.NoError,
-			LastError: r.LastError,
-		}
+		r.retry(ctx, chResult, true)
 		return nil
 	}
 
 	sshKey, err := readSSHAuthKey(ctx.Value("sshKey").(string))
 	if err != nil {
 		log.Printf("unable to read ssh private key: %v", err)
+		r.retry(ctx, chResult, false)
 		return err
 	}
 
@@ -57,6 +68,7 @@ func (r *Upload) Do(ctx context.Context, chResult chan interface{}) error {
 	sshClient, err := ssh.Dial("tcp", ctx.Value("sshServer").(string), sshConfig)
 	if err != nil {
 		log.Printf("unable to connect to ssh server: %v", err)
+		r.retry(ctx, chResult, false)
 		return err
 	}
 	defer sshClient.Close()
@@ -64,14 +76,7 @@ func (r *Upload) Do(ctx context.Context, chResult chan interface{}) error {
 	now := time.Now()
 	if err := sftpUpload(sshClient, r.FileName); err != nil {
 		log.Printf("unable to upload %s: %v", r.FileName, err)
-		if r.NoError < ctx.Value("maxError").(int)-1 {
-			chResult <- &UploadResult{
-				FileName:  r.FileName,
-				NoError:   r.NoError + 1,
-				LastError: time.Now(),
-			}
-		}
-
+		r.retry(ctx, chResult, false)
 		return err
 	}
 	log.Printf("uploaded %s (errors:%d; took:%.2fs)", r.FileName, r.NoError, time.Since(now).Seconds())

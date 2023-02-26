@@ -10,7 +10,7 @@ Upload will take place right after single recording is finished.
 Recorder is using MQTT to get new tasks. It also exposes HTTP endpoints.
 
 ## Build
-`cd src && go build .`
+`go build .`
 
 ## Usage
 
@@ -26,11 +26,6 @@ docker run -d \
 
 ## Config
 ```
-mqtt:
-  topic: recorder
-  server: mqtt.local:1883
-  password: password
-  user: recorder
 ssh:
   server: 10.10.10.10:22
   user: recorder
@@ -43,9 +38,13 @@ upload:
   max_errors: 30
 record:
   workers: 4
-  burst_overlap: 2
+  input_args:
+    "rtsp_transport": "tcp"
+  output_args:
+    "c:a": "aac"
+    "c:v": "copy"
 convert:
-  workers: 0
+  workers: 1
   input_args:
     "f": "concat"
     "vaapi_device": "/dev/dri/renderD128"
@@ -58,15 +57,15 @@ convert:
     "vf": "format=nv12|vaapi,hwupload"
 ```
 
-Each config property can be passed as env variable, e.g. `mqtt:server` can be passed as `MQTT_SERVER`.
+Each config property can be passed as env variable, e.g. `ssh:server` can be passed as `RECORDER_SSH_SERVER`.
 
 If you want to disable some services (upload, convert), you need to set `workers: 0` for this service.
 Record service can't be disabled.
 
 Config will be readed from `/config/config.yaml`.
 
-## MQTT
-Tasks to recorder should be send over MQTT. Recorder expect to get JSON messages.
+## How to trigger recording
+Tasks to recorder should be send over HTTP. Recorder expect to get JSON messages.
 
 ### Example message
 ```
@@ -77,6 +76,12 @@ Tasks to recorder should be send over MQTT. Recorder expect to get JSON messages
     "length": 10,
     "burst": 3
 }
+```
+
+```
+curl -v localhost:8080/api/record \
+    -H 'Content-Type: application/json' \
+    -d '{"stream": "rtsp://user:password@cam1/Streaming/Channels/101?transportmode=unicast&profile=Profile_1&tcp", "burst": 3, "cam_name": "cam1", "prefix": "example", "length": 10}'
 ```
 
 ### Burst
@@ -101,11 +106,149 @@ Using convert re-encode, will burn planty of CPU cycles, if possible use hardwar
 
 **Converted video will not be uploaded to remote server.**
 
+## K8s definition
+```
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: recorder
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recorder
+  namespace: recorder
+  labels:
+    app.kubernetes.io/name: recorder
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: false
+  ports:
+    - name: recorder
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: recorder
+
+---
+apiVersion: v1
+data:
+  id_rsa: <replace_me>
+kind: Secret
+metadata:
+  name: recorder
+  namespace: recorder
+type: Opaque
+
+---
+apiVersion: v1
+data:
+  config: |
+    ssh:
+      user: recorder
+      key: /secret/id_rsa
+      server: <replace_me>
+    upload:
+      workers: 4
+    record:
+      workers: 4
+    convert:
+      workers: 1
+kind: ConfigMap
+metadata:
+  name: recorder
+  namespace: recorder
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recorder
+  namespace: recorder
+  labels:
+    app.kubernetes.io/name: recorder
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: recorder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: recorder
+      annotations:
+        prometheus.io/port: "8080"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+        - name: recorder
+          image: ghcr.io/bkupidura/recorder:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /secret
+              name: id-rsa
+            - mountPath: /config
+              name: config
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /ready
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          env:
+            - name: TZ
+              value: Europe/Warsaw
+      volumes:
+        - name: id-rsa
+          secret:
+            secretName: recorder
+            defaultMode: 0400
+            items:
+              - key: id_rsa
+                path: id_rsa
+        - name: config
+          configMap:
+            name: recorder
+            items:
+              - key: config
+                path: config.yaml
+      terminationGracePeriodSeconds: 5
+```
+
 ## HTTP
 Recorder exposes multiple HTTP endpoints:
 
-* /healthz - recorder healthcheck
+* /healthz - recorder healthcheck endpoint
+* /ready - recorder readiness endpoint
 * /metrics - prometheus metrics
 * /recordings/ - expose recordings directory listening
+* /api/record - accept recording request
 
 Recorder is listening on `:8080` port.

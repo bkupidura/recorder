@@ -23,6 +23,7 @@ func getConfig() (*viper.Viper, error) {
 	config.SetEnvPrefix("recorder")
 	config.AutomaticEnv()
 
+	config.SetDefault("record.dir", "/data")
 	config.SetDefault("record.workers", 4)
 	config.SetDefault("record.input_args", map[string]interface{}{})
 	config.SetDefault("record.output_args", map[string]interface{}{"c:a": "aac", "c:v": "copy"})
@@ -33,11 +34,10 @@ func getConfig() (*viper.Viper, error) {
 	config.SetDefault("upload.timeout", 60)
 	config.SetDefault("upload.max_errors", 30)
 
+	config.SetDefault("convert.dir", "/data")
 	config.SetDefault("convert.workers", 0)
 	config.SetDefault("convert.input_args", map[string]interface{}{"f": "concat", "safe": "0"})
 	config.SetDefault("convert.output_args", map[string]interface{}{"c:a": "copy", "c:v": "h264", "preset": "veryfast"})
-
-	config.SetDefault("output.path", "/data")
 
 	if err := config.ReadInConfig(); err != nil {
 		log.Printf("unable to read config file, starting with defaults: %s", err)

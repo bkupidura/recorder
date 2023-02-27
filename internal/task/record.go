@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -27,16 +28,21 @@ type Record struct {
 }
 
 type SingleRecordResult struct {
-	FileName string
-	Prefix   string
-	Date     string
+	RecordRootDir  string
+	Prefix         string
+	RecordingDate  string
+	FileName       string
+	FilePath       string
+	FileNamePrefix string
 }
 
 type MultipleRecordResult struct {
-	FileNames   []string
-	Prefix      string
-	DirName     string
-	TotalLength int64
+	RecordRootDir  string
+	Prefix         string
+	RecordingDate  string
+	FilesPath      []string
+	FileNamePrefix string
+	TotalLength    int64
 }
 
 func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
@@ -46,11 +52,13 @@ func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
 	var parts []string
 
 	startTime := time.Now()
-	dirName := fmt.Sprintf("%s/%s/%s", ctx.Value("outputDir"), r.Prefix, startTime.Format(dateLayout))
+	// /data/prefix/20-02-2023
+	dirPath := filepath.Join(ctx.Value("outputDir").(string), r.Prefix, startTime.Format(dateLayout))
+	// 07:36:36.178-cam_nam
 	fileNamePrefix := fmt.Sprintf("%s-%s", startTime.Format(timeLayout), r.CamName)
 
-	if err := os.MkdirAll(dirName, 0755); err != nil {
-		log.Printf("unable to create %s: %v", dirName, err)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		log.Printf("unable to create %s: %v", dirPath, err)
 		return err
 	}
 
@@ -59,30 +67,38 @@ func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
 		go func(r *Record) {
 			defer wg.Done()
 
-			fileName := fmt.Sprintf("%s/%s-%03d-%03d.mp4", dirName, fileNamePrefix, i+1, r.Burst)
+			// 07:36:36.178-cam_nam-001-003.mp4
+			fileName := fmt.Sprintf("%s-%03d-%03d.mp4", fileNamePrefix, i+1, r.Burst)
+			// /data/prefix/20-02-2023/07:36:36.178-cam_nam-001-003.mp4
+			filePath := filepath.Join(dirPath, fileName)
 
 			now := time.Now()
-			if err := ffmpegRecord(r.Stream, fileName, ctx.Value("ffmpegInputArgs").(map[string]string), ctx.Value("ffmpegOutputArgs").(map[string]string), r.Length); err != nil {
+			if err := ffmpegRecord(r.Stream, filePath, ctx.Value("ffmpegInputArgs").(map[string]string), ctx.Value("ffmpegOutputArgs").(map[string]string), r.Length); err != nil {
 				log.Printf("unable to record %s from stream: %v", fileName, err)
 				return
 			}
 			log.Printf("recorded %s (took:%.2fs)", fileName, time.Since(now).Seconds())
 
 			chResult <- &SingleRecordResult{
-				FileName: fileName,
-				Prefix:   r.Prefix,
-				Date:     startTime.Format(dateLayout),
+				RecordRootDir:  ctx.Value("outputDir").(string),
+				Prefix:         r.Prefix,
+				RecordingDate:  startTime.Format(dateLayout),
+				FileName:       fileName,
+				FilePath:       filePath,
+				FileNamePrefix: fileNamePrefix,
 			}
-			parts = append(parts, fileName)
+			parts = append(parts, filePath)
 		}(r)
 		time.Sleep(time.Duration(r.Length-int64(burstOverlap)) * time.Second)
 	}
 	wg.Wait()
 	chResult <- &MultipleRecordResult{
-		FileNames:   parts,
-		Prefix:      fileNamePrefix,
-		DirName:     dirName,
-		TotalLength: r.Burst * r.Length,
+		RecordRootDir:  ctx.Value("outputDir").(string),
+		Prefix:         r.Prefix,
+		RecordingDate:  startTime.Format(dateLayout),
+		FilesPath:      parts,
+		FileNamePrefix: fileNamePrefix,
+		TotalLength:    r.Burst * r.Length,
 	}
 
 	return nil

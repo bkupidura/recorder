@@ -12,8 +12,9 @@ import (
 	"recorder/internal/task"
 )
 
+// main will start recorder.
 func main() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	log.SetFlags(log.Ldate | log.Ltime | log.Llongfile)
 	log.Printf("starting recorder")
 
 	config, err := getConfig()
@@ -24,7 +25,7 @@ func main() {
 	workingPools := make(map[string]*pool.Pool)
 
 	ctxRecord := context.Background()
-	ctxRecord = context.WithValue(ctxRecord, "outputDir", config.GetString("output.path"))
+	ctxRecord = context.WithValue(ctxRecord, "outputDir", config.GetString("record.dir"))
 	ctxRecord = context.WithValue(ctxRecord, "ffmpegInputArgs", config.GetStringMapString("record.input_args"))
 	ctxRecord = context.WithValue(ctxRecord, "ffmpegOutputArgs", config.GetStringMapString("record.output_args"))
 
@@ -36,6 +37,7 @@ func main() {
 	ctxUpload = context.WithValue(ctxUpload, "maxError", config.GetInt("upload.max_errors"))
 
 	ctxConvert := context.Background()
+	ctxConvert = context.WithValue(ctxConvert, "outputDir", config.GetString("convert.dir"))
 	ctxConvert = context.WithValue(ctxConvert, "ffmpegInputArgs", config.GetStringMapString("convert.input_args"))
 	ctxConvert = context.WithValue(ctxConvert, "ffmpegOutputArgs", config.GetStringMapString("convert.output_args"))
 
@@ -67,7 +69,7 @@ func main() {
 	})
 
 	httpRouter := api.NewRouter(&api.Options{
-		RecordingPath: config.GetString("output.path"),
+		RecordingPath: config.GetString("record.dir"),
 		WorkingPools:  workingPools,
 		AuthUsers:     config.GetStringMapString("api.user"),
 	})
@@ -86,9 +88,10 @@ func dispatcher(workingPools map[string]*pool.Pool) {
 			// Single recording was done, lets upload it to remote sftp server.
 			case *task.SingleRecordResult:
 				tUpload := &task.Upload{
-					FileName: result.FileName,
-					Prefix:   result.Prefix,
-					Date:     result.Date,
+					Prefix:        result.Prefix,
+					RecordingDate: result.RecordingDate,
+					FileName:      result.FileName,
+					FilePath:      result.FilePath,
 				}
 				if workingPools["upload"].Running() {
 					workingPools["upload"].Execute(tUpload.Do)
@@ -96,10 +99,11 @@ func dispatcher(workingPools map[string]*pool.Pool) {
 			// All recordings are done, lets start convert action.
 			case *task.MultipleRecordResult:
 				tConvert := &task.Convert{
-					FileNames: result.FileNames,
-					Prefix:    result.Prefix,
-					DirName:   result.DirName,
-					Length:    result.TotalLength,
+					Prefix:         result.Prefix,
+					RecordingDate:  result.RecordingDate,
+					FileNamePrefix: result.FileNamePrefix,
+					FilesPath:      result.FilesPath,
+					TotalLength:    result.TotalLength,
 				}
 				if workingPools["convert"].Running() {
 					workingPools["convert"].Execute(tConvert.Do)
@@ -108,12 +112,14 @@ func dispatcher(workingPools map[string]*pool.Pool) {
 		// Upload task generates result only on failure.
 		// This is used to retry uploads.
 		case uploadResult := <-workingPools["upload"].ResultChan():
+			result := uploadResult.(*task.UploadResult)
 			tUpload := &task.Upload{
-				FileName:  uploadResult.(*task.UploadResult).FileName,
-				Prefix:    uploadResult.(*task.UploadResult).Prefix,
-				Date:      uploadResult.(*task.UploadResult).Date,
-				NoError:   uploadResult.(*task.UploadResult).NoError,
-				LastError: uploadResult.(*task.UploadResult).LastError,
+				Prefix:        result.Prefix,
+				RecordingDate: result.RecordingDate,
+				FileName:      result.FileName,
+				FilePath:      result.FilePath,
+				NoError:       result.NoError,
+				LastError:     result.LastError,
 			}
 			workingPools["upload"].Execute(tUpload.Do)
 		}

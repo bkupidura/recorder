@@ -28,8 +28,8 @@ import (
 var (
 	// This directory will be removed after tests!
 	outputPath        = "/tmp/recorder_tests"
-	testVideoFileName = fmt.Sprintf("%s/recorder_test.mp4", outputPath)
-	sshKey            = fmt.Sprintf("%s/id_rsa", outputPath)
+	testVideoFileName = filepath.Join(outputPath, "recorder_test.mp4")
+	sshKey            = filepath.Join(outputPath, "id_rsa")
 	sshServerAddr     = "127.0.0.1:2222"
 	httpBaseURL       = fmt.Sprintf("http://localhost:%d", api.HTTPPort)
 )
@@ -37,15 +37,17 @@ var (
 func TestRecorder(t *testing.T) {
 	os.Setenv("RECORDER_SSH_SERVER", sshServerAddr)
 	os.Setenv("RECORDER_SSH_KEY", sshKey)
-	os.Setenv("RECORDER_OUTPUT_PATH", outputPath)
+	os.Setenv("RECORDER_RECORD_DIR", outputPath)
+	os.Setenv("RECORDER_CONVERT_DIR", outputPath)
 	os.Setenv("RECORDER_CONVERT_WORKERS", "1")
-	for _, k := range []string{"RECORDER_SSH_SERVER", "RECORDER_SSH_KEY", "RECORDER_OUTPUT_PATH", "RECORDER_CONVERT_WORKERS"} {
+	for _, k := range []string{"RECORDER_SSH_SERVER", "RECORDER_SSH_KEY", "RECORDER_RECORD_DIR", "RECORDER_CONVERT_DIR", "RECORDER_CONVERT_WORKERS"} {
 		defer os.Unsetenv(k)
 	}
 
+	os.RemoveAll(outputPath)
 	err := os.Mkdir(outputPath, os.ModePerm)
-	defer os.RemoveAll(outputPath)
 	require.Nil(t, err)
+	defer os.RemoveAll(outputPath)
 
 	err = os.Mkdir(filepath.Join(outputPath, "data"), os.ModePerm)
 	require.Nil(t, err)
@@ -164,7 +166,6 @@ func (h *TestSftpHandler) Handler(sess ssh.Session) {
 	requestShouldFail := false
 	if h.EveryNRequestShouldFail > 0 {
 		if h.requestNumber%h.EveryNRequestShouldFail == 0 {
-			log.Printf("this sftp should fail")
 			requestShouldFail = true
 		}
 	}

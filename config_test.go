@@ -25,6 +25,7 @@ func TestGetConfig(t *testing.T) {
 				c := viper.New()
 				d := []byte(`
                 record:
+                  dir: /data
                   workers: 4
                   output_args:
                     "c:a": "aac"
@@ -37,6 +38,7 @@ func TestGetConfig(t *testing.T) {
                   timeout: 60
                   max_errors: 30
                 convert:
+                  dir: /data
                   workers: 0
                   input_args:
                     "f": "concat"
@@ -45,8 +47,6 @@ func TestGetConfig(t *testing.T) {
                     "c:a": "copy"
                     "c:v": "h264"
                     "preset": "veryfast"
-                output:
-                  path: /data
                 `)
 				c.SetConfigType("yaml")
 				c.ReadConfig(bytes.NewBuffer(d))

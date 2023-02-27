@@ -14,32 +14,35 @@ import (
 
 var (
 	errorBackoffSecond = 2
-	sftpDirectory      = "data"
+	sftpRootDirectory  = "data"
 )
 
 type Upload struct {
-	FileName  string
-	Prefix    string
-	Date      string
-	NoError   int
-	LastError time.Time
+	Prefix        string
+	RecordingDate string
+	FileName      string
+	FilePath      string
+	NoError       int
+	LastError     time.Time
 }
 
 type UploadResult struct {
-	FileName  string
-	Prefix    string
-	Date      string
-	NoError   int
-	LastError time.Time
+	Prefix        string
+	RecordingDate string
+	FileName      string
+	FilePath      string
+	NoError       int
+	LastError     time.Time
 }
 
 func (r *Upload) retry(ctx context.Context, chResult chan interface{}, onlyRetry bool) {
 	result := &UploadResult{
-		FileName:  r.FileName,
-		Prefix:    r.Prefix,
-		Date:      r.Date,
-		NoError:   r.NoError,
-		LastError: r.LastError,
+		Prefix:        r.Prefix,
+		RecordingDate: r.RecordingDate,
+		FileName:      r.FileName,
+		FilePath:      r.FilePath,
+		NoError:       r.NoError,
+		LastError:     r.LastError,
 	}
 	if !onlyRetry && r.NoError < ctx.Value("maxError").(int)-1 {
 		result.NoError++
@@ -80,7 +83,8 @@ func (r *Upload) Do(ctx context.Context, chResult chan interface{}) error {
 	defer sshClient.Close()
 
 	now := time.Now()
-	if err := sftpUpload(sshClient, r.Prefix, r.Date, r.FileName); err != nil {
+	dirPath := filepath.Join(sftpRootDirectory, r.Prefix, r.RecordingDate)
+	if err := sftpUpload(sshClient, r.FilePath, dirPath, r.FileName); err != nil {
 		log.Printf("unable to upload %s: %v", r.FileName, err)
 		r.retry(ctx, chResult, false)
 		return err
@@ -102,7 +106,7 @@ func readSSHAuthKey(keyName string) (ssh.Signer, error) {
 	return signer, nil
 }
 
-func sftpUpload(sshClient *ssh.Client, prefix, date, fileName string) error {
+func sftpUpload(sshClient *ssh.Client, localFile, remoteDir, remoteFile string) error {
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
 		return err
@@ -110,19 +114,20 @@ func sftpUpload(sshClient *ssh.Client, prefix, date, fileName string) error {
 	defer sftpClient.Close()
 
 	// Create dirs in format data/prefix/date/
-	err = sftpClient.MkdirAll(filepath.Join(sftpDirectory, prefix, date))
+	err = sftpClient.MkdirAll(remoteDir)
 	if err != nil {
 		return err
 	}
 
-	dstFileName := filepath.Base(fileName)
-	dstFile, err := sftpClient.Create(filepath.Join(sftpDirectory, prefix, date, dstFileName))
+	// data/prefix/date/07:36:36.178-cam1-001-003.mp4
+	remotePath := filepath.Join(remoteDir, remoteFile)
+	dstFile, err := sftpClient.Create(remotePath)
 	if err != nil {
 		return err
 	}
 	defer dstFile.Close()
 
-	srcFile, err := os.Open(fileName)
+	srcFile, err := os.Open(localFile)
 	if err != nil {
 		return err
 	}

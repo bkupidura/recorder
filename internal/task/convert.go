@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,26 +16,35 @@ import (
 
 var (
 	ffmpegConvertRatio = 2
+	tmpDir             = "/tmp"
 )
 
 type Convert struct {
-	FileNames []string
-	Prefix    string
-	DirName   string
-	Length    int64
+	Prefix         string
+	RecordingDate  string
+	FileNamePrefix string
+	FilesPath      []string
+	TotalLength    int64
 }
 
 func (r *Convert) Do(ctx context.Context, chResult chan interface{}) error {
-	if len(r.FileNames) == 0 {
+	if len(r.FilesPath) == 0 {
 		return nil
 	}
 	now := time.Now()
-	outputFileName := fmt.Sprintf("%s/%s-convert.mp4", r.DirName, r.Prefix)
-	if err := ffmpegConvert(r.FileNames, outputFileName, ctx.Value("ffmpegInputArgs").(map[string]string), ctx.Value("ffmpegOutputArgs").(map[string]string), r.Length); err != nil {
-		log.Printf("unable to convert %s: %v", outputFileName, err)
+
+	// /data/prefix/26-02-2023
+	dirPath := filepath.Join(ctx.Value("outputDir").(string), r.Prefix, r.RecordingDate)
+	// 07:36:36.178-cam1-convert.mp4
+	fileName := fmt.Sprintf("%s-convert.mp4", r.FileNamePrefix)
+	// /data/prefix/26-02-2023/07:36:36.178-cam1-convert.mp4
+	filePath := filepath.Join(dirPath, fileName)
+
+	if err := ffmpegConvert(r.FilesPath, filePath, ctx.Value("ffmpegInputArgs").(map[string]string), ctx.Value("ffmpegOutputArgs").(map[string]string), r.TotalLength); err != nil {
+		log.Printf("unable to convert %s: %v", filePath, err)
 		return err
 	}
-	log.Printf("converted %s (length:%ds took:%.2fs)", outputFileName, int(r.Length), time.Since(now).Seconds())
+	log.Printf("converted %s (length:%ds took:%.2fs)", filePath, int(r.TotalLength), time.Since(now).Seconds())
 	return nil
 }
 
@@ -46,7 +56,7 @@ func ffmpegConvert(inputFiles []string, outputFileName string, inputArgs map[str
 
 	content := []byte(strings.Join(parts, "\n"))
 
-	listFileName := fmt.Sprintf("/tmp/" + uuid.New().String())
+	listFileName := filepath.Join(tmpDir, uuid.New().String())
 	if err := ioutil.WriteFile(listFileName, content, 0644); err != nil {
 		log.Printf("unable to prepare concat list: %v\n", err)
 		return err

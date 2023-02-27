@@ -64,8 +64,8 @@ func (p *Pool) spawnWorkers() {
 						p.errors++
 					}
 					p.mu.Unlock()
-					// When channel is closed, stop worker.
-					// Only used in tests.
+				// When channel is closed, stop worker.
+				// Only used in tests.
 				case <-p.chDone:
 					return
 				}

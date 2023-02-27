@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/render"
 )
 
+// errResponse describes error response for any API call.
 type errResponse struct {
 	Err            error  `json:"-"`               // low-level runtime error
 	HTTPStatusCode int    `json:"-"`               // http response status code
@@ -46,6 +47,8 @@ func unableToPerformError(err error) render.Renderer {
 	}
 }
 
+// healthHandler returns /healthz and /ready endpoint handler.
+// It just check if every work pool have running workers.
 func healthHandler(workingPools map[string]*pool.Pool) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		for _, pool := range workingPools {
@@ -58,6 +61,7 @@ func healthHandler(workingPools map[string]*pool.Pool) func(http.ResponseWriter,
 	}
 }
 
+// apiRecordRequest describes API request used to start recording.
 type apiRecordRequest struct {
 	Stream  string `json:"stream"`
 	CamName string `json:"cam_name"`
@@ -66,6 +70,7 @@ type apiRecordRequest struct {
 	Burst   int64  `json:"burst"`
 }
 
+// Bind validates request.
 func (req *apiRecordRequest) Bind(r *http.Request) error {
 	if req.Stream == "" {
 		return fmt.Errorf("stream url is required")
@@ -85,6 +90,8 @@ func (req *apiRecordRequest) Bind(r *http.Request) error {
 	return nil
 }
 
+// recorderHandler will start recording.
+// apiRecordRequest should be passed.
 func recordHandler(recordPool *pool.Pool) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		request := &apiRecordRequest{}
@@ -102,6 +109,8 @@ func recordHandler(recordPool *pool.Pool) func(http.ResponseWriter, *http.Reques
 
 		if err := recordPool.Execute(tRecord.Do); err != nil {
 			render.Render(w, r, unableToPerformError(err))
+			return
 		}
+		render.JSON(w, r, tRecord)
 	}
 }

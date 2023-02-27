@@ -3,7 +3,6 @@ package task
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -17,6 +16,9 @@ import (
 var (
 	ffmpegConvertRatio = 2
 	tmpDir             = "/tmp"
+
+	// mocks for tests.
+	osWriteFile = os.WriteFile
 )
 
 type Convert struct {
@@ -40,6 +42,11 @@ func (r *Convert) Do(ctx context.Context, chResult chan interface{}) error {
 	// /data/prefix/26-02-2023/07:36:36.178-cam1-convert.mp4
 	filePath := filepath.Join(dirPath, fileName)
 
+	if err := osMkdirAll(dirPath, 0755); err != nil {
+		log.Printf("unable to create %s: %v", dirPath, err)
+		return err
+	}
+
 	if err := ffmpegConvert(r.FilesPath, filePath, ctx.Value("ffmpegInputArgs").(map[string]string), ctx.Value("ffmpegOutputArgs").(map[string]string), r.TotalLength); err != nil {
 		log.Printf("unable to convert %s: %v", filePath, err)
 		return err
@@ -57,7 +64,7 @@ func ffmpegConvert(inputFiles []string, outputFileName string, inputArgs map[str
 	content := []byte(strings.Join(parts, "\n"))
 
 	listFileName := filepath.Join(tmpDir, uuid.New().String())
-	if err := ioutil.WriteFile(listFileName, content, 0644); err != nil {
+	if err := osWriteFile(listFileName, content, 0644); err != nil {
 		log.Printf("unable to prepare concat list: %v\n", err)
 		return err
 	}

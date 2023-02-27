@@ -8,7 +8,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -84,6 +83,7 @@ func TestRecorder(t *testing.T) {
 	nowDate := now.Format("02-01-2006")
 	for _, endpoint := range []string{"ready", "healthz", "metrics", "recordings/", "recordings/test/", fmt.Sprintf("recordings/test/%s/", nowDate)} {
 		res, err = http.Get(fmt.Sprintf("%s/%s", httpBaseURL, endpoint))
+		require.Nil(t, err)
 		require.Equal(t, http.StatusOK, res.StatusCode)
 	}
 
@@ -91,7 +91,7 @@ func TestRecorder(t *testing.T) {
 	time.Sleep(8 * time.Second)
 
 	// Check "local" recording files.
-	recordingFiles, err := ioutil.ReadDir(filepath.Join(outputPath, "test", nowDate))
+	recordingFiles, err := os.ReadDir(filepath.Join(outputPath, "test", nowDate))
 	require.Nil(t, err)
 	require.Equal(t, 4, len(recordingFiles))
 
@@ -106,7 +106,7 @@ func TestRecorder(t *testing.T) {
 	}
 
 	// Check "remote" recording files.
-	recordingFiles, err = ioutil.ReadDir(filepath.Join(outputPath, "data", "test", nowDate))
+	recordingFiles, err = os.ReadDir(filepath.Join(outputPath, "data", "test", nowDate))
 	require.Nil(t, err)
 	require.Equal(t, 3, len(recordingFiles))
 
@@ -173,7 +173,7 @@ func (h *TestSftpHandler) Handler(sess ssh.Session) {
 	if requestShouldFail {
 		return
 	}
-	debugStream := ioutil.Discard
+	debugStream := io.Discard
 	serverOptions := []sftp.ServerOption{
 		sftp.WithDebug(debugStream),
 		sftp.WithServerWorkingDirectory(outputPath),

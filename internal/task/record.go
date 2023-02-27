@@ -17,6 +17,10 @@ var (
 	timeLayout        = "15:04:05.000"
 	ffmpegRecordRatio = 2
 	burstOverlap      = 2
+
+	// mocks for tests.
+	osMkdirAll = os.MkdirAll
+	timeNow    = time.Now
 )
 
 type Record struct {
@@ -51,20 +55,20 @@ func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
 	var wg sync.WaitGroup
 	var parts []string
 
-	startTime := time.Now()
+	startTime := timeNow()
 	// /data/prefix/20-02-2023
 	dirPath := filepath.Join(ctx.Value("outputDir").(string), r.Prefix, startTime.Format(dateLayout))
 	// 07:36:36.178-cam_nam
 	fileNamePrefix := fmt.Sprintf("%s-%s", startTime.Format(timeLayout), r.CamName)
 
-	if err := os.MkdirAll(dirPath, 0755); err != nil {
+	if err := osMkdirAll(dirPath, 0755); err != nil {
 		log.Printf("unable to create %s: %v", dirPath, err)
 		return err
 	}
 
 	for i := int64(0); i < r.Burst; i++ {
 		wg.Add(1)
-		go func(r *Record) {
+		go func(r *Record, i int64) {
 			defer wg.Done()
 
 			// 07:36:36.178-cam_nam-001-003.mp4
@@ -72,7 +76,7 @@ func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
 			// /data/prefix/20-02-2023/07:36:36.178-cam_nam-001-003.mp4
 			filePath := filepath.Join(dirPath, fileName)
 
-			now := time.Now()
+			now := timeNow()
 			if err := ffmpegRecord(r.Stream, filePath, ctx.Value("ffmpegInputArgs").(map[string]string), ctx.Value("ffmpegOutputArgs").(map[string]string), r.Length); err != nil {
 				log.Printf("unable to record %s from stream: %v", fileName, err)
 				return
@@ -88,17 +92,19 @@ func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
 				FileNamePrefix: fileNamePrefix,
 			}
 			parts = append(parts, filePath)
-		}(r)
+		}(r, i)
 		time.Sleep(time.Duration(r.Length-int64(burstOverlap)) * time.Second)
 	}
 	wg.Wait()
-	chResult <- &MultipleRecordResult{
-		RecordRootDir:  ctx.Value("outputDir").(string),
-		Prefix:         r.Prefix,
-		RecordingDate:  startTime.Format(dateLayout),
-		FilesPath:      parts,
-		FileNamePrefix: fileNamePrefix,
-		TotalLength:    r.Burst * r.Length,
+	if len(parts) > 0 {
+		chResult <- &MultipleRecordResult{
+			RecordRootDir:  ctx.Value("outputDir").(string),
+			Prefix:         r.Prefix,
+			RecordingDate:  startTime.Format(dateLayout),
+			FilesPath:      parts,
+			FileNamePrefix: fileNamePrefix,
+			TotalLength:    int64(len(parts)) * r.Length,
+		}
 	}
 
 	return nil

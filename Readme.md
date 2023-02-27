@@ -31,13 +31,12 @@ ssh:
   server: 10.10.10.10:22
   user: recorder
   key: /secret/id_rsa
-output:
-  path: /data
 upload:
   workers: 4
   timeout: 60
   max_errors: 30
 record:
+  dir: /data
   workers: 4
   input_args:
     "rtsp_transport": "tcp"
@@ -45,6 +44,7 @@ record:
     "c:a": "aac"
     "c:v": "copy"
 convert:
+  dir: /data
   workers: 1
   input_args:
     "f": "concat"
@@ -96,9 +96,9 @@ If you provide `burst` parameters in request JSON - recorder will create multipl
 }
 ```
 Recorder will record 3 videos, each 10s long. Every video will start 2s before previous video ends.
-* part001.mp4 - 0s - 10s
-* part002.mp4 - 8s - 18s
-* part003.mp4 - 16s - 26s
+* cam_name-001-003.mp4 - 0s - 10s
+* cam_name-002-003.mp4 - 8s - 18s
+* cam_name-003-003.mp4 - 16s - 26s
 
 ## Convert
 When convert is enabled (`workers > 0`), when recording is finished, convert will be executed. It can be used to e.g. concat (join multiple bursts into single video) and change video encoding.
@@ -253,6 +253,7 @@ Recorder exposes multiple HTTP endpoints:
 * /api/record - accept recording request
 
 Recorder is listening on `:8080` port.
+
 By default all endpoints are available without authentication, if you want to enable auth simply add `api:user` key to the config file. This will enable basic authentication for `/recordings/` and `/api`.
 
 ## SFTP configuration

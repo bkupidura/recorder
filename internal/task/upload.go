@@ -15,6 +15,9 @@ import (
 var (
 	errorBackoffSecond = 2
 	sftpRootDirectory  = "data"
+
+	// mocks for tests.
+	ioCopy = io.Copy
 )
 
 type Upload struct {
@@ -46,7 +49,7 @@ func (r *Upload) retry(ctx context.Context, chResult chan interface{}, onlyRetry
 	}
 	if !onlyRetry && r.NoError < ctx.Value("maxError").(int)-1 {
 		result.NoError++
-		result.LastError = time.Now()
+		result.LastError = timeNow()
 	}
 
 	chResult <- result
@@ -82,7 +85,7 @@ func (r *Upload) Do(ctx context.Context, chResult chan interface{}) error {
 	}
 	defer sshClient.Close()
 
-	now := time.Now()
+	now := timeNow()
 	dirPath := filepath.Join(sftpRootDirectory, r.Prefix, r.RecordingDate)
 	if err := sftpUpload(sshClient, r.FilePath, dirPath, r.FileName); err != nil {
 		log.Printf("unable to upload %s: %v", r.FileName, err)
@@ -133,7 +136,7 @@ func sftpUpload(sshClient *ssh.Client, localFile, remoteDir, remoteFile string) 
 	}
 	defer srcFile.Close()
 
-	_, err = io.Copy(dstFile, srcFile)
+	_, err = ioCopy(dstFile, srcFile)
 	if err != nil {
 		return err
 	}

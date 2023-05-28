@@ -107,6 +107,10 @@ func (r *Record) Do(ctx context.Context, chResult chan interface{}) error {
 		}
 	}
 
+	if int64(len(parts)) != r.Burst {
+		return fmt.Errorf("unable to record all bursts")
+	}
+
 	return nil
 }
 

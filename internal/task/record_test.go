@@ -58,12 +58,13 @@ func TestRecordDo(t *testing.T) {
 			},
 			inputChResult: make(chan interface{}, 1),
 			inputRecord: &Record{
-				Stream:  "stream",
+				Stream:  "missing_stream",
 				Prefix:  "prefix",
 				CamName: "camName",
 				Length:  2,
 				Burst:   1,
 			},
+			expectedErr: fmt.Errorf("unable to record all bursts"),
 		},
 		{
 			inputCtxFunc: func() context.Context {
@@ -190,6 +191,7 @@ func TestRecordDo(t *testing.T) {
 					TotalLength:    5,
 				},
 			},
+			expectedErr: fmt.Errorf("unable to record all bursts"),
 		},
 	}
 	timeNow = func() time.Time {

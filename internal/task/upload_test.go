@@ -411,7 +411,7 @@ func TestSftpUpload(t *testing.T) {
 		{
 			inputSFTPHandler: &TestSftpHandler{},
 			inputRemoteDir:   "/non_existing",
-			expectedErr:      "sftp: \"mkdir /non_existing: read-only file system\" (SSH_FX_FAILURE)",
+			expectedErr:      "sftp: \"open /non_existing: is a directory\" (SSH_FX_FAILURE)",
 		},
 		{
 			inputSFTPHandler: &TestSftpHandler{},

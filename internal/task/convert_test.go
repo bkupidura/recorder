@@ -56,7 +56,7 @@ func TestConvertDo(t *testing.T) {
 				},
 				TotalLength: 10,
 			},
-			expectedErr: fmt.Errorf("exit status 1"),
+			expectedErr: fmt.Errorf("exit status 183"),
 		},
 		{
 			inputCtxFunc: func() context.Context {
@@ -147,17 +147,17 @@ func TestFFMEGConvert(t *testing.T) {
 				"a",
 				"b",
 			},
-			expectedErr: fmt.Errorf("exit status 1"),
+			expectedErr: fmt.Errorf("exit status 254"),
 		},
 		{
 			inputFFMPEGInputArgs:  map[string]string{"abc": "test"},
 			inputFFMPEGOutputArgs: map[string]string{},
-			expectedErr:           fmt.Errorf("exit status 1"),
+			expectedErr:           fmt.Errorf("exit status 8"),
 		},
 		{
 			inputFFMPEGInputArgs:  map[string]string{},
 			inputFFMPEGOutputArgs: map[string]string{"abc": "test"},
-			expectedErr:           fmt.Errorf("exit status 1"),
+			expectedErr:           fmt.Errorf("exit status 8"),
 		},
 		{
 			inputFFMPEGInputArgs:  map[string]string{"f": "concat", "safe": "0"},
